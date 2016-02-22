@@ -1,11 +1,80 @@
 ---
-title: "Homework Assignment"
+title: "Data Science for Business: Homework Assignment"
+author: "Gyurmalin"
+date: "February 21, 2016"
 output: html_document
+fontsize: 14p
 ---
 
-Test rmd
+******
 
-```{r}
-pi
+
+
+### **Bank Marketing Data Set**
+
+
+#### Downloaded from UCI Machine Learning Repository
+
+******
+#### Source: http://archive.ics.uci.edu/ml/datasets/Bank+Marketing.
+
+#### This dataset is public available for research. The details are described in S. Moro, P. Cortez and P. Rita. A Data-Driven Approach to Predict the Success of Bank Telemarketing. Decision Support Systems, Elsevier, 62:22-31, June 2014
+
+******
+
+#### Introduction
+
+This dataset provides unformation of telemarketing campaigns pursued by a Portuguese bank. Aim of current analysis is to predict whether a client would subscribe for a term deposit (yes/no). There are 20 input variables and a binary output variable.
+
+**For this assignment I decided to mark all code chunks in the documentation in order to track processes step-by-step.**
+
+******
+
+#### Set libraries
+
+
+```{r
+opts_chunk$set(warning=FALSE, error=FALSE, 
+message=FALSE)}
+
+library(readr)
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+
+library(knitr)
+opts_knit$set(root.dir = "../")
 ```
 
+******
+
+#### Read data and check its structure
+
+As mentioned above, we have 20 predictors and 1 output (altogehther 21 features).
+There are altogether 41188 observations.
+```{r}
+bank <- read.csv("C:/Users/Szaffi/Desktop/Gyurma/Data_Science_for_Business/bank-additional/bank-additional-full.csv", sep=";")
+```
+
+Our variables are the following:
+```{r}
+colnames(bank)
+```
+
+Let's have a look at the structure of our data. As mentioned above, we have 20 predictors and 1 output (altogehther 21 features).
+There are altogether 41188 observations.
+```{r}
+dim(bank)
+str(bank)
+```
+
+And check some base descriptive statistics on raw data set:
+```{r}
+summary(bank)
+```
+
+#### Have a quick look at data itself
+
+```{r}
+head(bank)
+```
