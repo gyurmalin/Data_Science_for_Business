@@ -22,7 +22,7 @@ fontsize: 14p
 
 ******
 
-#### Introduction
+### Introduction
 
 This dataset provides unformation of telemarketing campaigns pursued by a Portuguese bank. Aim of current analysis is to predict whether a client would subscribe for a term deposit (yes/no). There are 20 input variables and a binary output variable.
 
@@ -33,14 +33,13 @@ This dataset provides unformation of telemarketing campaigns pursued by a Portug
 #### Set libraries
 
 
-```{r
-opts_chunk$set(warning=FALSE, error=FALSE, 
-message=FALSE)}
 
+```{r warning=FALSE, error=FALSE, message=FALSE}
 library(readr)
 library(dplyr)
 library(reshape2)
 library(ggplot2)
+library(pander)
 
 library(knitr)
 opts_knit$set(root.dir = "../")
@@ -48,33 +47,127 @@ opts_knit$set(root.dir = "../")
 
 ******
 
-#### Read data and check its structure
+### Read data and review data structure
 
-As mentioned above, we have 20 predictors and 1 output (altogehther 21 features).
-There are altogether 41188 observations.
+
 ```{r}
 bank <- read.csv("C:/Users/Szaffi/Desktop/Gyurma/Data_Science_for_Business/bank-additional/bank-additional-full.csv", sep=";")
 ```
 
-Our variables are the following:
+Our variables are the following (with the outpur variable *y* at the 21th place):
+
 ```{r}
 colnames(bank)
 ```
 
-Let's have a look at the structure of our data. As mentioned above, we have 20 predictors and 1 output (altogehther 21 features).
-There are altogether 41188 observations.
+Let's have a look at the structure of our data. We have 20 predictors and 1 output variable and altogether 41188 observations.
+
 ```{r}
 dim(bank)
 str(bank)
 ```
 
-And check some base descriptive statistics on raw data set:
-```{r}
-summary(bank)
-```
-
-#### Have a quick look at data itself
+It may be useful to prepare some very basic descriptive statistics at this early stage of the data analysis project on raw data set. As one can see below there are categories like 'unknownn' and 'other' at many variables. We keep it in mind for later steps.
 
 ```{r}
-head(bank)
+pander(summary(bank))
 ```
+
+******
+
+#### Now, let's have a quick look at data itself checking the first 3 elements of each features
+
+```{r}
+pander(head(bank, 3))
+```
+
+******
+
+#### Check NAs and less than 0 values
+
+```{r warning=FALSE}
+sapply(bank, function(x) sum(is.na(x)))
+sapply(bank, function(x) sum(x<0, na.rm=TRUE)) 
+```
+
+As we will see later there are some variables with 'unknown' values (not equal to NAs).
+There are two variables with negative values by default (*emp.var.rate and cons.conf_idx*).
+
+*******
+
+*******
+
+### Variables in data set
+
+*******
+
+####  **Target variable: Y** (*binary: 'Yes' / 'No'*)
+
+This variables shows whether the customer subscribed for a term deposit. 
+
+```{r}
+pander(bank %>% group_by(y) %>% summarize(n = n()) %>% mutate(percentage = n/sum(n)*100))
+```
+
+More than 11% of customers subscribed for term deposit that altogether means 4640 observations.
+
+*******
+
+#### Input variables or predictors
+
+
+##### **Age** (*numeric*)
+
+This variable provides information on customer's age in years
+
+```{r}
+pander(summary(bank$age))
+ggplot(bank, aes(x = age)) + geom_histogram(binwidth = 5, col = "white") + theme_bw()
+```
+
+As age variable shows a slightly skewed distribution with a right tail it might be useful to take logs and make log values available as -potential - input variables for modeling.
+
+```{r}
+bank$lnage <- log(bank$age)
+pander(summary(bank$lnage))
+ggplot(bank, aes(x = lnage)) + geom_histogram(binwidth = 0.1, col = "white") + theme_bw()
+```
+
+Another question whether to exclude observations under or above a specified treshold.
+We have 5 observations with an age below 18 years and 20 above 90. I decided to exclude these rows according to relatively high probability of data error. 
+*FILTER!!!!!!!!!!!!*
+```{r}
+nrow(bank[bank$age < 18, ])
+nrow(bank[bank$age > 90, ])
+
+bank %>% filter(age < 18) 
+
+```
+
+
+
+
+*****
+
+##### **Job** (*categorical*)
+
+Job variable gives information on the job typer of the customers. There are 11 specified and 1 unspecified categories.
+
+```{r}
+ggplot(bank, aes(x = job)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+nrow(bank[bank$job =="unknown", ])
+```
+
+All observations are categorised under the 12 categories with 330 unknown. At this stage I would not exclude any of the latter based on the unknown status.
+
+*****
+
+##### **marital** (*categorical*)
+
+Marital status feature contains 4 categories as follows:
+
+```{r}
+ggplot(bank, aes(x = marital)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
