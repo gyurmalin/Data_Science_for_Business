@@ -43,6 +43,8 @@ library(pander)
 
 library(knitr)
 opts_knit$set(root.dir = "../")
+
+set.seed(41)
 ```
 
 ******
@@ -52,6 +54,12 @@ opts_knit$set(root.dir = "../")
 
 ```{r}
 bank <- read.csv("C:/Users/Szaffi/Desktop/Gyurma/Data_Science_for_Business/bank-additional/bank-additional-full.csv", sep=";")
+```
+
+I decided to randomly reorder data at this early stage
+
+```{r}
+bank <- bank[sample(1:nrow(bank)), ]
 ```
 
 Our variables are the following (with the outpur variable *y* at the 21th place):
@@ -113,7 +121,7 @@ More than 11% of customers subscribed for term deposit that altogether means 464
 
 *******
 
-#### Input variables or predictors
+#### Input variables - predictors
 
 
 ##### **Age** (*numeric*)
@@ -125,7 +133,20 @@ pander(summary(bank$age))
 ggplot(bank, aes(x = age)) + geom_histogram(binwidth = 5, col = "white") + theme_bw()
 ```
 
-As age variable shows a slightly skewed distribution with a right tail it might be useful to take logs and make log values available as -potential - input variables for modeling.
+An important question whether to exclude observations under or above a specified treshold.
+We have 5 observations with an age below 18 years and 10 with higher than 90. I decided to exclude these rows according to relatively high probability of data error. 
+
+```{r}
+nrow(bank[bank$age < 18, ])
+nrow(bank[bank$age > 90, ])
+
+bank <- bank %>% filter(age >= 18)
+bank <- bank %>% filter(age < 90)
+dim(bank)
+```
+
+
+As age variable shows a slightly skewed distribution with a right tail I decided to try taking logs and check distibution of log values as well.
 
 ```{r}
 bank$lnage <- log(bank$age)
@@ -133,41 +154,243 @@ pander(summary(bank$lnage))
 ggplot(bank, aes(x = lnage)) + geom_histogram(binwidth = 0.1, col = "white") + theme_bw()
 ```
 
-Another question whether to exclude observations under or above a specified treshold.
-We have 5 observations with an age below 18 years and 20 above 90. I decided to exclude these rows according to relatively high probability of data error. 
-*FILTER!!!!!!!!!!!!*
+Let's have a look at ages by the target variable:
+
 ```{r}
-nrow(bank[bank$age < 18, ])
-nrow(bank[bank$age > 90, ])
-
-bank %>% filter(age < 18) 
-
+ggplot(bank) + geom_histogram(aes(x = age), binwidth = 0.1, col = "white") +
+  facet_grid(y~., scales = "free") + scale_x_log10() + theme_bw()
 ```
-
-
 
 
 *****
 
 ##### **Job** (*categorical*)
 
-Job variable gives information on the job typer of the customers. There are 11 specified and 1 unspecified categories.
+Job variable gives information on the job profile of targeted customers. There are 11 specified and 1 unspecified categories.
 
 ```{r}
 ggplot(bank, aes(x = job)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 nrow(bank[bank$job =="unknown", ])
 ```
 
-All observations are categorised under the 12 categories with 330 unknown. At this stage I would not exclude any of the latter based on the unknown status.
+All observations are listed under the 12 categories with 330 unknown. In order to enhance accuracy finally I decided to exclude observations with unknown job category.
+
+```{r}
+bank <- bank %>% filter(job != "unknown") 
+```
+
+```{r}
+ggplot(bank) + geom_bar(aes(x = job), col = "white") +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
 
 *****
 
-##### **marital** (*categorical*)
+##### **Marital** (*categorical*)
 
 Marital status feature contains 4 categories as follows:
 
 ```{r}
 ggplot(bank, aes(x = marital)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+nrow(bank[bank$marital =="unknown", ])
+```
+
+There are 80 variables with unknown marital status: considering the small number of observations I decided to exclude all these records.
+
+```{r}
+bank <- bank %>% filter(marital != "unknown") 
+```
+
+```{r}
+ggplot(bank) + geom_bar(aes(x = marital), col = "white") +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+*****
+
+##### **Education** (*categorical*)
+
+Education is also a categorical variable with 7 categories + 1 unknown.
+
+```{r}
+ggplot(bank, aes(x = education)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+nrow(bank[bank$education =="unknown", ])
+nrow(bank[bank$education =="illiterate", ])
+```
+
+In case of education variable number of unknkown observations is pretty high.
+In order to decide whether to exclude them let's check education by our target variable.
+
+By eyeballing I decide now not to exclude observations concerned as their ratio ssems to be similar in both cases of decisions.
+
+On the other hand I decided to exclude those 18 observations that are listed in the illiteral category.
+
+```{r}
+ggplot(bank) + geom_bar(aes(x = education), col = "white") +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r}
+bank <- bank %>% filter(education != "illiterate") 
+
 ```
 
 
+*****
+
+##### **Default** (*categorical*)
+
+This variable shows whether the targeted customer has a credit in default.
+There are 3 categories: a binary yes/no and the unknown  that seems to be an issue as about 20% of customers are in the latter category.
+
+```{r}
+nrow(bank[bank$default =="unknown", ])
+```
+
+```{r}
+ggplot(bank, aes(x = default)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplot(bank) + geom_bar(aes(x = default), col = "white") +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r}
+nrow(bank[bank$default =="yes", ])
+```
+
+As number of obsevations with yes is negligable I suppose that its an exclusion to have a credit in default. 3 exceptions are probably errors that will be excluded. Unknown observations, however, will not be excluded due to their relatively high proportion.
+
+```{r}
+bank <- bank %>% filter(default != "yes") 
+
+```
+
+*****
+
+##### **Housing** (*categorical*)
+
+This variable shows whether the targeted customer has a housing loan.
+Here we also have 3 categories: a binary yes/no and the unknown.
+
+```{r}
+ggplot(bank, aes(x = housing)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplot(bank) + geom_bar(aes(x = housing), col = "white") +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Let's remove unknown.
+
+```{r}
+bank <- bank %>% filter(housing != "unknown") 
+
+```
+
+
+*****
+
+##### **Loan** (*categorical*)
+
+Whether the targeted customer has a personal loan (yes/no/unknown).
+
+```{r}
+ggplot(bank, aes(x = loan)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplot(bank) + geom_bar(aes(x = loan), col = "white") +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Let's remove unknown again.
+
+```{r}
+bank <- bank %>% filter(loan != "unknown") 
+
+```
+
+*****
+
+##### **Contact** (*categorical*)
+
+This variable shows the contact communication type (cellular/telephone).
+
+```{r}
+ggplot(bank, aes(x = contact)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplot(bank) + geom_bar(aes(x = contact), col = "white") +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+*****
+
+##### **Month** (*categorical*)
+
+Last contact month of the year (cellular/telephone).
+
+Order of months looks a bit strange, I admit. But it's OK now for us (checking variables).
+Contact month seems to be a strong predictor - at least for current dataset. Keep it in mind (in order to avoid overfitting later).
+```{r}
+ggplot(bank, aes(x = month)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplot(bank) + geom_bar(aes(x = month), col = "white") +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+*****
+
+##### **Day of week** (*categorical*)
+
+Last contact day of the week (the 5 weekdays). Nothing special at first sight.
+
+```{r}
+ggplot(bank, aes(x = day_of_week)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplot(bank) + geom_bar(aes(x = day_of_week), col = "white") +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+*****
+
+##### **Duration** (*numeric*)
+
+Last contact duration, in seconds. 
+*Authors note: "this attribute highly affects the output target (e.g., if duration=0 then y='no'). Yet, the duration is not known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input should only be included for benchmark purposes and should be discarded if the intention is to have a realistic predictive model."*
+
+Based on above I'm going to exclude this variable, however, let's see its distribution in itself.
+
+```{r}
+ggplot(bank, aes(x = duration)) + geom_bar() + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ln_duration <- log(bank$duration)
+ggplot(bank, aes(x = ln_duration)) + geom_histogram(binwidth = 0.1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplot(bank) + geom_histogram(aes(x = ln_duration), binwidth = 0.1) +
+  facet_grid(y~., scales = "free")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+*****
+
+##### **Campaign** (*numeric*)
+
+Number of contacts performed during this campaign and for this client (including last contact).
+Campaign lasts for 10 months. I consider more than 10 contacts an issue or data error (vecause of probably applied contact rules). We have 0.8k observations with more than 10 contacts. I'm going to ddop them.
+
+```{r}
+summary(bank$campaign)
+ggplot(bank, aes(x = campaign)) + geom_histogram(binwidth = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+nrow(bank[bank$campaign > 10, ])
+bank <- bank %>% filter(campaign < 10) 
+```
+
+
+*****
+
+##### **Pdays** (*numeric*)
+
+Number of days after the client was last contacted from a previous campaign (999 means client was not previously contacted). In most cases this variable gets 999 that's why I won't use it as a predictor.
+
+```{r}
+ggplot(bank, aes(x = pdays)) + geom_histogram(binwidth = 50) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+
+
+After above modifications we have ... observations.
+
+```{r}
+dim(bank)
+```
