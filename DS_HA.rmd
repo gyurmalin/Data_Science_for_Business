@@ -1,7 +1,7 @@
 ---
 title: "Data Science for Business: Homework Assignment"
-author: "Gyurmalin"
-date: "February 21, 2016"
+author: "Gyorgy Jablonszky"
+date: "February 28, 2016"
 output: html_document
 fontsize: 14p
 ---
@@ -40,11 +40,11 @@ library(dplyr)
 library(reshape2)
 library(ggplot2)
 library(pander)
+library(h2o)
 
 library(knitr)
 opts_knit$set(root.dir = "../")
 
-set.seed(41)
 ```
 
 ******
@@ -53,7 +53,7 @@ set.seed(41)
 
 
 ```{r}
-bank <- read.csv("C:/Users/Szaffi/Desktop/Gyurma/Data_Science_for_Business/bank-additional/bank-additional-full.csv", sep=";")
+bank <- read.csv("C:/Users/Szaffi/Desktop/Gyurma/Data_Science_for_Business/bank-additional/bank-additional-full.csv", sep=";") # specify directory or URL as data soruce
 ```
 
 I decided to randomly reorder data at this early stage
@@ -478,7 +478,7 @@ dim(bank)
 
 #### Data cleaning and feature engineering
 
-Data cleaning was performed above, here comes some new features derived from the feature set shown previously.
+Data cleaning was performed above, here comes some new features derived from the feature set shown previously and some to drop out of our prediction.
 
 *****
 
@@ -619,11 +619,242 @@ bank$poutcome3  <- as.numeric(bank$poutcome == "success")
 
 *****
 
-After such steps we get many new variables contaioning binary values.
+#### Some modicitaions of feature names
 
 ```{r}
+bank <- bank %>% rename(empvarrate = `emp.var.rate`, conspriceidx  = `cons.price.idx`, consconfidx  = `cons.conf.idx`, nremployed  = `nr.employed`)
+```
+
+*****
+
+#### Drop some features
+
+Now we have several features and some of them are overrepresented due to the dummification. There are also some features that seem to be not so good preictors or simply irrelevant as they are. So let's drop out, which we don't want to use at the modeling phase.
+
+```{r}
+bank$job <- NULL # Drop originals od dummified categorical features 
+bank$marital <- NULL
+bank$education <- NULL
+bank$default <- NULL
+bank$housing <- NULL
+bank$loan <- NULL
+bank$contact <- NULL
+bank$month <- NULL
+bank$day_of_week <- NULL
+bank$poutcome <- NULL
+
+
+bank$duration <- NULL
+bank$pdays <- NULL
+
+bank$empvarrate <- NULL
+bank$conspriceidx <- NULL
+bank$consconfidx <- NULL
+bank$euribor3m <- NULL
+bank$nremployed <- NULL
+
+bank <- bank[,c(4,1,2,3,5:55)] #Reorder variables to put target variable to the first place
+
+```
+
+*****
+
+After such steps we get many new variables containing binary values and some droped.
+
+```{r}
+colnames(bank)
 dim(bank)
 ```
 
 
-#### Modeling
+*****
+
+#### Split sample
+
+Here I'm going to split the entire sample into training/validation/test sets and also provide possibilites for cross-validation.
+
+```{r}
+set.seed(41)
+
+N <- nrow(bank)
+idx_train <- sample(1:N,N/2)
+idx_valid <- sample(base::setdiff(1:N, idx_train), N/4)
+idx_test <- base::setdiff(base::setdiff(1:N, idx_train),idx_valid)
+bank_train <- bank[idx_train,]
+bank_valid <- bank[idx_valid,]
+bank_test  <- bank[idx_test,]
+```
+
+*****
+
+### Modeling
+
+In the following part I'm going to train and evaluate some models.
+In order to enhance effifiency I used the remote H2O server for calculations.
+Here my objective is to understand the modeling process in H2O. This means accuracy is a secondary consideration in this case so results will probably not be as good as they would be required in a real-life project. Thus I will not modify parameters to get the best results but run some type of models in H2O.
+
+*****
+
+#### Setup H2O
+
+```{r}
+library(h2o)
+h2o.init(max_mem_size = "4g", nthreads = -1)
+```
+
+*****
+
+#### Upload sets to H2O
+
+```{r}
+b_train <- as.h2o(bank_train)  
+b_valid <- as.h2o(bank_valid)
+b_test <- as.h2o(bank_test)
+```
+
+*****
+
+#### Run a Random Forest model
+
+```{r}
+system.time({
+  rf <- h2o.randomForest(x = 2:ncol(b_train), y = 1, 
+                         seed = 41 ,training_frame = b_train, validation_frame=b_valid,
+                         mtries = -1, ntrees = 500, max_depth = 20, nbins = 200)
+})
+```
+
+Let's see the results. Not so dazzling, to be honest. What about GBM?
+
+```{r}
+rf
+
+h2o.auc(rf) 
+h2o.auc(h2o.performance(rf, b_test))
+```
+
+```{r}
+mse <- h2o.mse(rf,train=TRUE,valid=TRUE)
+print(mse)
+err <- eval(rf,b_train,b_valid) 
+print(err)
+```
+
+#### Run a GBM model
+
+```{r}
+system.time({
+  gbm <- h2o.gbm(x = 2:ncol(b_train), y = 1, 
+                seed = 41, training_frame = b_train, validation_frame = b_valid,
+                max_depth = 15, ntrees = 500, learn_rate = 0.03, nbins = 100,
+                stopping_rounds = 3)
+})
+```
+
+Now, the results. Could be better if parameter were changed.
+
+```{r}
+gbm
+
+h2o.auc(gbm)
+h2o.auc(h2o.performance(gbm, b_test))
+```
+
+```{r}
+gbm_mse <- h2o.mse(gbm,train=TRUE,valid=TRUE)
+print(gbm_mse)
+gbm_err <- eval(gbm,b_train,b_valid)
+print(gbm_err)
+```
+
+#### Now run a GBM model with x-validation
+
+```{r}
+system.time({
+  gbmx <- h2o.gbm(x = 2:ncol(b_train), y = 1, 
+                seed = 41, training_frame = b_train, validation_frame = b_valid,
+                max_depth = 15, ntrees = 500, learn_rate = 0.03, nbins = 100, nfolds = 5,
+                stopping_rounds = 3)
+})
+```
+
+```{r}
+gbmx
+
+h2o.auc(gbmx)
+h2o.auc(h2o.performance(gbmx, b_test))
+```
+
+```{r}
+gbmx_mse <- h2o.mse(gbmx,train=TRUE,valid=TRUE)
+print(gbmx_mse)
+gbmx_err <- eval(gbmx,b_train,b_valid)
+print(gbmx_err)
+```
+
+#### Now a GBM model with grid-search 
+
+*This GBM Grid Search was finally excluded from the project by reason of a technical issue:
+
+I could not manage to run it in rmd without getting the following error message:*
+
+*-Quitting from lines 832-836 (DS_HA.rmd) 
+Error in .h2o.doSafeREST(h2oRestApiVersion = h2oRestApiVersion, urlSuffix = page,  : 
+  Unexpected CURL error: Recv failure: Connection was reset
+Calls: <Anonymous> ... h2o.getModel -> .h2o.__remoteSend -> .h2o.doSafeREST
+In addition: There were 19 warnings (use warnings() to see them)*-
+
+Code, however, is provided below:
+<!--
+
+system.time({
+  gbmgr <- h2o.grid("gbm", x = 2:ncol(b_train), y = 1, 
+            training_frame = b_train, validation_frame = b_valid,
+            hyper_params = list(ntrees = 500,
+                                max_depth = c(5,10,20),
+                                learn_rate = c(0.01,0.1),
+                                nbins = 100),
+            stopping_rounds = 5)
+})
+
+
+
+gbmgr
+
+do.call(rbind, lapply(gbmgr@model_ids, function(m_id) {
+  mm <- h2o.getModel(m_id)
+  hyper_params <- mm@allparameters
+  data.frame(m_id = m_id, 
+             auc = h2o.performance(mm, b_test)@metrics$AUC,
+             max_depth = hyper_params$max_depth,
+             learn_rate = hyper_params$learn_rate )
+})) %>% arrange(desc(auc)) 
+
+
+
+gbmgr_mse <- h2o.mse(gbmgr,train=TRUE,valid=TRUE)
+print(gbmgr_mse)
+gbmgr_err <- eval(gbmgr,b_train,b_valid)
+print(gbmgr_err)
+
+-->
+
+#### Finally, a Neural Network
+
+```{r}
+system.time({
+  nn <- h2o.deeplearning(x = 2:ncol(b_train), y = 1, 
+          training_frame = b_train, validation_frame = b_valid,
+          activation = "Rectifier", hidden = c(200,200), epochs = 100,
+          stopping_rounds = 3)
+})
+```
+
+```{r}
+nn_mse <- h2o.mse(nn,train=TRUE,valid=TRUE)
+print(nn_mse)
+nn_err <- eval(nn,b_train,b_valid)
+print(nn_err)
+```
+
+
